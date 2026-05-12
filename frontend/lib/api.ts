@@ -16,3 +16,18 @@ export const postAdmin = async (
   const res = await API.post(`/${endpoint}`, data);
   return res.data;
 };
+
+export const patchAdmin = async (
+  endpoint: string,
+  data: any
+) => {
+  const res = await API.patch(`/${endpoint}`, data);
+  return res.data;
+};
+
+export const deleteAdmin = async (
+  endpoint: string
+) => {
+  const res = await API.delete(`/${endpoint}`);
+  return res.data;
+};

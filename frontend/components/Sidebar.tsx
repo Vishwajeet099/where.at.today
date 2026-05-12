@@ -8,6 +8,9 @@ export default function Sidebar() {
 
       <ul className="space-y-4">
         <li>
+          <Link href="/admin/event">Events</Link>
+        </li>
+        <li>
           <Link href="/admin/city">Cities</Link>
         </li>
 
