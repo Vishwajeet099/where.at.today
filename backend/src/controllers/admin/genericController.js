@@ -47,12 +47,24 @@ export const createOne =
         });
       }
 
-      const slug = slugify(data.name);
+      const tablesWithSlug = [
+        "cities",
+        "venues",
+        "categories",
+        "events",
+        "tags",
+        "organizers",
+        "performers",
+      ];
+      const hasSlug = tablesWithSlug.includes(table);
+      const slug = hasSlug ? slugify(data.name) : null;
 
-      const exists = await pool.query(
-        `SELECT * FROM ${table} WHERE slug = $1`,
-        [slug]
-      );
+      const existsQuery = hasSlug
+        ? `SELECT * FROM ${table} WHERE slug = $1`
+        : `SELECT * FROM ${table} WHERE name = $1`;
+      const existsParams = hasSlug ? [slug] : [data.name];
+
+      const exists = await pool.query(existsQuery, existsParams);
 
       if (exists.rows.length > 0) {
         return res.status(400).json({
@@ -60,13 +72,11 @@ export const createOne =
         });
       }
 
-      const columns = ["name", "slug", ...fields];
+      const columns = hasSlug ? ["name", "slug", ...fields] : ["name", ...fields];
 
-      const values = [
-        data.name,
-        slug,
-        ...fields.map((f) => data[f] || null),
-      ];
+      const values = hasSlug
+        ? [data.name, slug, ...fields.map((f) => data[f] || null)]
+        : [data.name, ...fields.map((f) => data[f] || null)];
 
       const placeholders = columns.map(
         (_, i) => `$${i + 1}`

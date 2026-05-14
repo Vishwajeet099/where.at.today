@@ -23,7 +23,7 @@ export const getEvents = async (req, res) => {
         em.media_url AS image,
 
         ts.name AS seller,
-        et.ticket_url,
+        COALESCE(NULLIF(et.ticket_url, ''), ts.website) AS ticket_url,
         et.price
 
       FROM event_instances ei

@@ -11,6 +11,14 @@ interface EventInstance {
   venue_id: string | { name: string; address?: string };
   start_at: Date;
   end_at?: Date;
+  tickets?: { seller_id?: string; price?: string; ticket_url?: string }[];
+}
+
+
+interface SelectOption {
+  id: string;
+  name: string;
+  [key: string]: any;
 }
 
 interface SelectedItem {
@@ -24,25 +32,73 @@ interface SelectedItem {
 export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedCity, setSelectedCity] = useState(null);
-  const [categories, setCategories] = useState([]);
+  const [selectedCity, setSelectedCity] = useState<SelectOption | null>(null);
+  const [status, setStatus] = useState("published");
+  const [categories, setCategories] = useState<string[]>([]);
   const [performers, setPerformers] = useState<SelectedItem[]>([]);
   const [organizers, setOrganizers] = useState<SelectedItem[]>([]);
+  const [ticketSellers, setTicketSellers] = useState<SelectOption[]>([]);
   const [mediaUrl, setMediaUrl] = useState("");
   const [instances, setInstances] = useState<EventInstance[]>([
-    { venue_id: "", start_at: new Date(), end_at: undefined },
+    { venue_id: "", start_at: new Date(), end_at: undefined, tickets: [] },
   ]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchTicketSellers = async () => {
+      try {
+        const data = await getAdmin("ticket-sellers");
+        setTicketSellers(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error fetching ticket sellers:", err);
+      }
+    };
+    fetchTicketSellers();
+  }, []);
 
   const handleAddInstance = () => {
     setInstances([
       ...instances,
-      { venue_id: "", start_at: new Date(), end_at: undefined },
+      { venue_id: "", start_at: new Date(), end_at: undefined, tickets: [] },
     ]);
   };
 
   const handleRemoveInstance = (idx: number) => {
     setInstances(instances.filter((_, i) => i !== idx));
+  };
+
+  const handleAddTicket = (idx: number) => {
+    const newInstances = [...instances];
+    if (!newInstances[idx].tickets) newInstances[idx].tickets = [];
+    newInstances[idx].tickets!.push({
+      seller_id: "",
+      price: "",
+    });
+    setInstances(newInstances);
+  };
+
+  const handleRemoveTicket = (instanceIdx: number, ticketIdx: number) => {
+    const newInstances = [...instances];
+    newInstances[instanceIdx].tickets = newInstances[instanceIdx].tickets?.filter(
+      (_, i) => i !== ticketIdx
+    );
+    setInstances(newInstances);
+  };
+
+  const handleTicketChange = (
+    instanceIdx: number,
+    ticketIdx: number,
+    field: string,
+    value: string
+  ) => {
+    const newInstances = [...instances];
+    if (newInstances[instanceIdx].tickets) {
+      newInstances[instanceIdx].tickets![ticketIdx] = {
+        ...newInstances[instanceIdx].tickets![ticketIdx],
+        [field]: value,
+      };
+    }
+    setInstances(newInstances);
   };
 
   const handleInstanceVenueChange = (idx: number, venue: any) => {
@@ -59,16 +115,23 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
     setInstances(newInstances);
   };
 
-  const handleInstanceStartChange = (idx: number, date: Date) => {
+  const handleInstanceStartChange = (idx: number, date: Date | null) => {
     const newInstances = [...instances];
-    newInstances[idx].start_at = date;
+    newInstances[idx].start_at = date || new Date();
     setInstances(newInstances);
   };
 
-  const handleInstanceEndChange = (idx: number, date: Date) => {
+  const handleInstanceEndChange = (idx: number, date: Date | null) => {
     const newInstances = [...instances];
-    newInstances[idx].end_at = date;
+    newInstances[idx].end_at = date || undefined;
     setInstances(newInstances);
+  };
+
+  const formatLocalDateTime = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+      date.getHours()
+    )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
   };
 
   const handleSubmit = async () => {
@@ -82,6 +145,17 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
+    if (
+      instances.some((inst) =>
+        inst.tickets?.some(
+          (t) => !t.seller_id || t.price === undefined || t.price === null || t.price === "" || !t.ticket_url
+        )
+      )
+    ) {
+      alert("Please complete all ticket entries with a seller, price, and ticket URL.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -89,10 +163,14 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
         title,
         description,
         city_id: selectedCity.id,
+        status,
         instances: instances.map((inst) => ({
           venue_id: inst.venue_id,
-          start_at: inst.start_at.toISOString(),
-          end_at: inst.end_at?.toISOString(),
+          start_at: formatLocalDateTime(inst.start_at),
+          end_at: inst.end_at ? formatLocalDateTime(inst.end_at) : undefined,
+          tickets: inst.tickets?.filter(
+            (t) => t.seller_id && t.price !== undefined && t.price !== null && t.price !== "" && t.ticket_url
+          ),
         })),
         performers: performers.map((p) => ({
           id: p.id,
@@ -118,12 +196,13 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
         setTitle("");
         setDescription("");
         setSelectedCity(null);
+        setStatus("published");
         setCategories([]);
         setPerformers([]);
         setOrganizers([]);
         setMediaUrl("");
         setInstances([
-          { venue_id: "", start_at: new Date(), end_at: undefined },
+          { venue_id: "", start_at: new Date(), end_at: undefined, tickets: [] },
         ]);
         console.log("Calling onSuccess callback");
         onSuccess();
@@ -154,8 +233,23 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
         placeholder="Description"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        className="border p-2 w-full mb-4 min-h-[100px]"
+        className="border p-2 w-full mb-4 min-h-25"
       />
+
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-2">Status *</label>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="border p-2 w-full mb-2"
+        >
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+        </select>
+        <p className="text-xs text-gray-500">
+          Published events appear on the public frontend. Drafts are only visible in the admin panel.
+        </p>
+      </div>
 
       <SearchableSelect
         label="City *"
@@ -170,7 +264,11 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
         label="Categories"
         endpoint="categories"
         onSelectionChange={(items) =>
-          setCategories(items.map((item) => item.id).filter(Boolean))
+          setCategories(
+            items
+              .map((item) => item.id)
+              .filter((id): id is string => Boolean(id))
+          )
         }
       />
 
@@ -228,8 +326,8 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
                 </label>
                 <DatePicker
                   selected={instance.start_at}
-                  onChange={(date) =>
-                    handleInstanceStartChange(idx, date || new Date())
+                  onChange={(date: Date | null) =>
+                    handleInstanceStartChange(idx, date)
                   }
                   showTimeSelect
                   timeIntervals={30}
@@ -244,8 +342,8 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
                 </label>
                 <DatePicker
                   selected={instance.end_at}
-                  onChange={(date) =>
-                    date && handleInstanceEndChange(idx, date)
+                  onChange={(date: Date | null) =>
+                    handleInstanceEndChange(idx, date)
                   }
                   showTimeSelect
                   timeIntervals={30}
@@ -254,6 +352,67 @@ export default function EventForm({ onSuccess }: { onSuccess: () => void }) {
                   placeholderText="Optional"
                 />
               </div>
+            </div>
+
+            <div className="mt-3">
+              <label className="block text-sm font-medium mb-2">Tickets</label>
+              {instance.tickets && instance.tickets.length > 0 && (
+                <div className="space-y-2 mb-2">
+                  {instance.tickets.map((ticket, ticketIdx) => (
+                    <div key={ticketIdx} className="bg-white p-2 rounded border">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-xs font-semibold">Ticket {ticketIdx + 1}</span>
+                        <button
+                          onClick={() => handleRemoveTicket(idx, ticketIdx)}
+                          className="text-red-600 hover:text-red-800 text-sm"
+                        >
+                          ✕ Remove
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <select
+                          value={ticket.seller_id || ""}
+                          onChange={(e) =>
+                            handleTicketChange(idx, ticketIdx, "seller_id", e.target.value)
+                          }
+                          className="border p-1 text-sm rounded"
+                        >
+                          <option value="">Select Ticket Seller</option>
+                          {ticketSellers.map((seller) => (
+                            <option key={seller.id} value={seller.id}>
+                              {seller.name}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          placeholder="Price range (e.g. 1000 - 10000)"
+                          type="text"
+                          value={ticket.price || ""}
+                          onChange={(e) =>
+                            handleTicketChange(idx, ticketIdx, "price", e.target.value)
+                          }
+                          className="border p-1 text-sm rounded"
+                        />
+                        <input
+                          placeholder="Ticket URL"
+                          type="url"
+                          value={ticket.ticket_url || ""}
+                          onChange={(e) =>
+                            handleTicketChange(idx, ticketIdx, "ticket_url", e.target.value)
+                          }
+                          className="border p-1 text-sm rounded"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => handleAddTicket(idx)}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                + Add Ticket Seller
+              </button>
             </div>
           </div>
         ))}

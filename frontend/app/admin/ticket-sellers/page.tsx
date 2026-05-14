@@ -6,11 +6,11 @@ import Sidebar from "@/components/Sidebar";
 import ListPanel from "@/components/ListPanel";
 import GenericForm from "@/components/GenericForm";
 
-export default function OrganizersPage() {
+export default function TicketSellersPage() {
   const [data, setData] = useState([]);
 
   const load = async () => {
-    const res = await getAdmin("organizers");
+    const res = await getAdmin("ticket-sellers");
     setData(res);
   };
 
@@ -23,13 +23,13 @@ export default function OrganizersPage() {
       <Sidebar />
       <div className="flex-1 p-6 grid grid-cols-2 gap-6">
         <ListPanel
-          title="Organizers"
+          title="Ticket Sellers"
           items={data}
           renderItem={(i) => <span>{i.name}</span>}
         />
         <GenericForm
-          endpoint="organizers"
-          fields={["description", "website"]}
+          endpoint="ticket-sellers"
+          fields={["website"]}
           onSuccess={load}
         />
       </div>

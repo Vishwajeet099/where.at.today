@@ -97,7 +97,7 @@ export const createEvent = async (req, res) => {
       title,
       description,
       city_id,
-      status = "draft",
+      status = "published",
       instances = [],
       performers = [],
       organizers = [],
@@ -162,6 +162,42 @@ export const createEvent = async (req, res) => {
         VALUES ($1, $2, $3, $4) RETURNING id`,
         [eventId, venueId, instance.start_at, instance.end_at || null]
       );
+
+      const instanceId = instanceResult.rows[0].id;
+
+      // Add tickets for this instance
+      if (instance.tickets && instance.tickets.length > 0) {
+        for (const ticket of instance.tickets) {
+          if (
+            !ticket.seller_id ||
+            ticket.price === undefined ||
+            ticket.price === null ||
+            ticket.price === ""
+          ) {
+            continue;
+          }
+
+          // Get seller details to get the website/ticket URL
+          const sellerResult = await client.query(
+            `SELECT id, website FROM ticket_sellers WHERE id = $1`,
+            [ticket.seller_id]
+          );
+
+          if (sellerResult.rows.length === 0) continue;
+
+          const seller = sellerResult.rows[0];
+          const ticketUrl = ticket.ticket_url?.trim() || seller.website;
+
+          if (!ticketUrl) continue;
+
+          // Create ticket entry
+          await client.query(
+            `INSERT INTO event_tickets (event_instance_id, seller_id, ticket_url, price)
+            VALUES ($1, $2, $3, $4)`,
+            [instanceId, ticket.seller_id, ticketUrl, ticket.price]
+          );
+        }
+      }
     }
 
     // Link performers

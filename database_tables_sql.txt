@@ -164,7 +164,7 @@ CREATE TABLE event_tickets (
   event_instance_id UUID REFERENCES event_instances(id) ON DELETE CASCADE,
   seller_id UUID REFERENCES ticket_sellers(id) ON DELETE CASCADE,
   ticket_url TEXT NOT NULL,
-  price NUMERIC,
+  price TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
